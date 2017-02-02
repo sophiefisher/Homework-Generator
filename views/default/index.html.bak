@@ -1,0 +1,28 @@
+{{extend 'layout.html'}}
+
+{{if auth.has_membership('teacher'):}}
+<h2>{{=A('Teacher Interface',_href=URL('default','teacher_interface'))}}</h2>
+{{pass}}
+{{if auth.has_membership('student'):}}
+<h2>{{=A('Student Interface',_href=URL('default','student_interface'))}}</h2>
+{{pass}}
+
+
+
+<h1>
+    You can view:
+</h1>
+<ul>{{if auth.has_membership('student'):}}
+    <li></h><h4>{{=A('Student Profile',_href=URL('default','student_profile'))}}</h4></li>
+    {{elif auth.has_membership('teacher'):}}
+    <li></h><h4>{{=A('Teacher Profile',_href=URL('default','teacher_profile'))}}</h4></li>
+    {{pass}}
+
+    {{if auth.has_membership('student'):}}
+    <li></h><h4>{{=A('Your Worksheets',_href=URL('default','user_worksheets'))}}</h4></li>
+    {{pass}}
+    <li><h4>{{=A('All Worksheets',_href=URL('default','all_worksheets'))}}</h4></li>
+    {{if auth.has_membership('teacher'):}}
+    <li><h4>{{=A('Problem Creator',_href=URL('default','create_problem'))}}</h4></li>
+    {{pass}}
+</ul>

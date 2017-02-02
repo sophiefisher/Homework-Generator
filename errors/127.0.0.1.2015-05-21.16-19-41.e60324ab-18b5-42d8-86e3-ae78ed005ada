@@ -1,0 +1,21 @@
+(dp1
+S'output'
+p2
+S"<type 'exceptions.TypeError'> long() argument must be a string or a number, not 'Rows'"
+p3
+sS'layer'
+p4
+S'/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/controllers/default.py'
+p5
+sS'code'
+p6
+S'def user():\n    return dict(form=auth())\n\n@auth.requires_login()\ndef index():\n    return locals()\n\ndef user_worksheets():\n    student_id=db(db.student.email==auth.user.email).select()\n    my_courses=db(db.student_course.student_id==student_id).select()\n    return locals()\n\nresponse._vars=response._caller(user_worksheets)\n'
+p7
+sS'snapshot'
+p8
+(dp9
+sS'traceback'
+p10
+S'Traceback (most recent call last):\n  File "/Applications/web2py.app/Contents/Resources/gluon/restricted.py", line 221, in restricted\n  File "/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/controllers/default.py", line 13, in <module>\n  File "/Applications/web2py.app/Contents/Resources/gluon/globals.py", line 388, in <lambda>\n  File "/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/controllers/default.py", line 10, in user_worksheets\n  File "/Applications/web2py.app/Contents/Resources/gluon/dal.py", line 10718, in select\n  File "/Applications/web2py.app/Contents/Resources/gluon/dal.py", line 2465, in select\n  File "/Applications/web2py.app/Contents/Resources/gluon/dal.py", line 1862, in select\n  File "/Applications/web2py.app/Contents/Resources/gluon/dal.py", line 1768, in _select\n  File "/Applications/web2py.app/Contents/Resources/gluon/dal.py", line 1545, in expand\n  File "/Applications/web2py.app/Contents/Resources/gluon/dal.py", line 1441, in EQ\n  File "/Applications/web2py.app/Contents/Resources/gluon/dal.py", line 1556, in expand\n  File "/Applications/web2py.app/Contents/Resources/gluon/dal.py", line 2006, in represent\nTypeError: long() argument must be a string or a number, not \'Rows\'\n'
+p11
+s.

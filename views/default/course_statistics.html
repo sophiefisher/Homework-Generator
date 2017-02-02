@@ -1,0 +1,37 @@
+{{extend 'layout.html'}}
+    <style>
+        .title {
+            float:left; 
+            padding-left: 16px;
+        }
+        .button {
+            float:left; 
+        }
+    </style>
+
+
+<h4 class="button">{{=A('Back',_href=URL('default','class_progress'),_class='btn')}}</h4>
+
+<h1 class = "title">{{=section_one.name}} Statistics</h1>
+
+{{num_sections = 0}}
+{{for r in all_course_sections:}}
+    {{num_sections+=1}}
+{{pass}}
+<br>
+<br>
+<br>
+<table border = 3>
+    <tr>
+        {{if num_sections > 1:}}
+        <td>
+            <h3>{{=A('All Section Statistics',_href=URL('default','all_section_statistics'))}}</h3>
+        </td>
+        {{pass}}
+        {{for section in all_course_sections:}}
+        <td>
+            <h3>{{=A('Section %s Statistics'%(section.section),_href=URL('default','section_statistics',args=section.id))}}</h3>
+        </td>
+        {{pass}}
+    </tr>
+</table>

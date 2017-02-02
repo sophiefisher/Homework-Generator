@@ -1,0 +1,107 @@
+{{extend 'layout.html'}}
+    <style>
+        .title {
+            float:left; 
+            padding-left: 16px;
+        }
+        .button {
+            float:left; 
+        }
+        .ui-helper-center {
+            text-align: center;
+            vertical-align:middle
+        }
+        .delete {
+            font-size: 40px;
+        }
+
+        .name {
+            font-size: 25px;
+        }
+        .var {
+            font-size: 24px;
+        }
+        a {
+            color: ;
+        }
+        #correct {
+            color: #0099FF;
+            border-radius: 6px;
+            border: 1.5px solid #b3daff;
+            background: #e6f3ff;
+            padding: 5px;
+        }
+
+    </style>
+<h4 class = "button">{{=A('Back',_href=URL('default','index'),_class='btn')}}</h4>
+<h1 class = "title">Welcome!</h1>
+<br>
+<br>
+<br>
+{{if not my_problem_types:}}
+    <h2>
+        You don't have any problems to display yet. Create some {{=A('here!',_href=URL('default','create_problem'))}}
+    </h2>
+{{else:}}
+<h3><span id = "correct">{{=A('View Class Statistics',_href=URL('default','class_progress'))}}</span></h3>
+<h3><span id = "correct">{{=A('Create Problems',_href=URL('default','create_problem'))}}</span></h3>
+
+<h2>
+    My Problems:
+</h2>
+<table border=1>
+    <tr>
+        <td><h3><b>Problem Type</b></h3></td>
+        <td><h3><b>Manage Classes</b></h3></td>
+        <td><h3><b>Edit Variable Ranges</b></h3></td>
+        <td><h3><b>Edit Problem</b></h3></td>
+        <td><h3><b>Delete Problem Type</b></h3></td>
+    </tr>
+    {{for problem_type in my_problem_types:}}
+        <tr>
+            <td class="name ui-helper-center" style="max-width:600px; line-height: 26px;">
+                {{=A('%s'%(problem_type.name.title()),_href=URL('default','generator',args=(problem_type.id)))}}
+            </td>
+            <td>
+                {{if problem_type_classes[problem_type.id]:}}
+                    <table border = a>
+                        {{for course in problem_type_classes[problem_type.id]:}}
+                            {{if course.course_id.section=="1":}}
+                        <tr>
+                            
+                            <td>{{=course.course_id.name}}</td>
+                            <td>{{=A('[x]',_href=URL('default','remove_class_problem_type',args=(course.id)))}}</td>
+                            {{pass}}
+                        </tr>
+                        {{pass}}
+                    </table>
+                {{else:}}
+                    <h4>
+                        No classes assigned. Add some below!
+                    </h4>
+                {{pass}}
+                {{=A('Add Classes',_href=URL('default','add_problem_type_classes',args=problem_type.id))}}
+
+            </td>
+            <td class = "var" style="vertical-align:middle">
+                <table style = "margin:auto">
+                    {{for given in problem_type_given_types[problem_type.id]:}}
+                        <tr class = "vars">
+                           <td style = "padding: 8px;">
+                               {{=A(given.name,_href=URL('default','edit_givens',args=(given.id, problem_type.id)))}}
+                            </td>
+                        </tr>
+                    {{pass}}
+                </table>
+            </td>
+            <td class = "name ui-helper-center">
+                {{=A('Edit',_href=URL('default','edit_problem_type',args=(problem_type.id)))}}
+            </td>
+            <td class = "delete ui-helper-center">
+                {{=A('[x]',_href=URL('default','delete_problem_type',args=(problem_type.id)))}}
+            </td>
+        </tr>
+    {{pass}}
+</table>
+
+{{pass}}

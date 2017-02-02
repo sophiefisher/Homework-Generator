@@ -1,0 +1,61 @@
+{{extend 'layout.html'}}
+  <style>
+        .title {
+            float:left; 
+            padding-left: 16px;
+        }
+        .button {
+            float:left; 
+        }
+        .larger{
+            font-size:15px
+        }
+        .evenlarger{
+            font-size:20px
+        }
+    </style>
+<h4 class = "button">{{=A('Back',_href=URL('default','index'),_class='btn')}}</h4>
+<h1 class = "title">{{=auth.user.first_name}}'s Profile</h1>
+<br>
+<br>
+<br>
+<br>
+<h3>
+    Your stats (*1 point earned per question answered correctly):
+</h3>
+{{if my_courses:}}
+    <table border=3>
+        <tr>
+            {{for course in my_courses:}}
+                {{if course.course_id in d.keys():}}
+                    <td><h4><b>{{=course.course_id.name}}</b></h4></td>
+                {{pass}}
+            {{pass}}
+        </tr>
+        <tr>
+            {{for course in my_courses:}}
+                {{if course.course_id in d.keys():}}
+                    <td>
+                        <table>
+                            {{for problem_type in d[course.course_id]:}}
+                                <tr>
+                                    <td>{{=problem_type.name.capitalize()}}:</td>
+                                    {{if problem_type not in problem_type_scores.keys():}}
+                                        <td class="larger"><b>problems not attempted yet!</b></td>
+                                    {{elif problem_type in problem_type_scores.keys():}}
+                                        <td class="larger"><b class="evenlarger">{{=problem_type_scores[problem_type.id]}} </b>points</td>
+                                    {{pass}}
+                                </tr>
+                            {{pass}}
+                        </table>
+                            {{pass}}
+                        </ul>
+            {{pass}}
+                    </td>
+        </tr>
+    </table>
+{{else:}}
+        <h4>
+            No classes or worksheets to display!
+        </h4>
+{{pass}}

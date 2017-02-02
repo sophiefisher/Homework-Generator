@@ -1,0 +1,45 @@
+{{extend 'layout.html'}}
+  <style>
+        .title {
+            float:left; 
+            padding-left: 16px;
+        }
+        .button {
+            float:left; 
+        }
+    </style>
+<h4 class = "button">{{=A('Back',_href=URL('default','index'),_class='btn')}}</h4>
+<h1 class = "title">Your Classes & Worksheets</h1>
+<br>
+<br>
+<br>
+<br>
+{{if my_courses:}}
+    <table border=3>
+        <tr>
+            {{for course in my_courses:}}
+                <td><h4><b>{{=course.course_id.name}}</b></h4></td>
+            {{pass}}
+        </tr>
+        <tr>
+            {{for course in my_courses:}}
+            <td>
+                {{if course.course_id in d.keys():}}
+                    <ul>
+                        {{for problem_type in d[course.course_id]:}}
+                            <li>{{=A('%s Problem'%(problem_type.name.capitalize()),_href=URL('default','generator',args=(problem_type.id)))}}</li>
+                        {{pass}}
+                    </ul>
+                {{else:}}
+                <br>
+                <b>There are no worksheets to display in this class yet!</b>
+                {{pass}}
+            </td>
+            {{pass}}
+        </tr>
+    </table>
+{{else:}}
+        <h4>
+            No classes or worksheets to display!
+        </h4>
+{{pass}}

@@ -1,0 +1,52 @@
+{{extend 'layout.html'}}
+    <style>
+        .title {
+            float:left; 
+            padding-left: 16px;
+        }
+        .button {
+            float:left; 
+        }
+        a {
+            color: #0099FF;
+        }
+        #correct {
+            color: #0099FF;
+            border-radius: 6px;
+            border: 1.5px solid #b3daff;
+            padding: 3px;
+            font-size: 27px;
+            background: #e6f3ff;
+        }
+
+        #incorrect {
+            color: #F75D59;
+            border-radius: 6px;
+            border: 1.5px solid #ffd4cc;
+            padding: 3px;
+            font-size: 27px;
+            background: #FFE9E5;
+
+        }
+        #no_table_your_answer {
+            height: 25px;
+            width: 400 px;
+        }
+    </style>
+
+
+<h4 class="button">{{=A('Back',_href=session.jump_back,_class='btn')}}</h4>
+<h1 class="title">{{=problem_type.name.title()}}</h1>
+<br>
+<br>
+<br>
+<h3 style = "color: #3C3C78;">{{=prompt}}</h3>
+<br>
+{{=form}}
+
+{{if correct_answer_button:}}
+    <h1><span  id = correct>{{=A('Correct! Next question...',_href=URL('generator',args=problem_type.id))}}</span></h1>
+{{pass}}
+{{if wrong_answer_button:}}
+    <h2><span  id = incorrect>Incorrect! Try again</span></h2>
+{{pass}}

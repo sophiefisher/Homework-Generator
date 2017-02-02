@@ -1,0 +1,82 @@
+{{extend 'layout.html'}}
+    <style>
+        .title {
+            float:left; 
+            padding-left: 16px;
+        }
+        .button {
+            float:left; 
+        }
+        .blue {
+            color: #0099FF;
+        }
+    </style>
+<h4 class = "button">{{=A('Back',_href=URL('default','class_progress'),_class='btn')}}</h4>
+<h2 class = "title" ><span class = "blue">{{=problem_type.name}}</span> Statistics for <span class="blue">{{=course.name}}</span></h2>
+<br>
+<br>
+<br>
+<table border = 1>
+    <tr>
+        {{for section in all_course_sections:}}
+        <td>
+            <h2>
+                Section {{=section.section}}
+            </h2>
+        </td>
+        {{pass}}
+        {{if len(all_course_sections) > 1:}}
+        <td>
+            <h2>All Sections</h2>
+        </td>
+        {{pass}}
+    </tr>
+    <tr>
+        {{for section in all_course_sections:}}
+        <td>
+            {{if course_section_students[section.id]:}}
+                <table border = 1 style = "font-size: 17px;">
+                    <tr>
+                        <td><b>Student</b></td>
+                        <td><b>Average # of Attempts</b></td>
+                        <td><b># Solved</b></td>
+                    </tr>
+                    {{for student in course_section_students[section.id]:}}
+                    <tr>
+                        <td>{{=student.student_id.first_name}} {{=student.student_id.last_name}}</td>
+                        {{if (student.student_id) in student_stats:}}
+                            <td>{{=student_stats[student.student_id][0]}}</td>
+                            <td>{{=student_stats[student.student_id][1]}}</td>
+                        {{else:}}
+                            <td>Problem not attempted yet!</td>
+                            <td>Problem not attempted yet!</td>
+                        {{pass}}
+                    </tr>
+                    {{pass}}
+                    <tr>
+                        <td><b>Class Averages (only those who have attempted the problem!)</b></td>
+                        <td><b>{{=section_stats[section.id][0]}}</b></td>
+                        <td><b>{{=section_stats[section.id][1]}}</b></td>
+                    </tr>
+                </table>
+            {{else:}}
+                <span style = "font-size: 17px;">No students enrolled in this section!</span>
+            {{pass}}
+        </td>
+        {{pass}}
+        {{if len(all_course_sections) > 1:}}
+        <td>
+            <table border = 1 style = "font-size: 17px;">
+                <tr>
+                    <td><b>Average # of Attempts</b></td>
+                    <td><b>Average # Solved</b></td>
+                </tr>
+                <tr>
+                    <td>{{=avgclass_attempts}}</td>
+                    <td>{{=avgclass_solved}}</td>
+                </tr>
+            </table>
+        </td>
+        {{pass}}
+    </tr>
+</table>

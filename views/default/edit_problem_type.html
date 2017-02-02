@@ -1,0 +1,188 @@
+{{extend 'layout.html'}}
+    <style>
+        .title {
+            float:left; 
+            padding-left: 16px;
+        }
+        .button {
+            float:left; 
+        }
+        .name {
+            color: #0099FF;
+            font-size: 35px;
+        }
+        #break {
+            height: 5px;
+        }
+        #problem_type_name {
+            width:370px;
+            height:40px;
+        }
+        #problem_type_given_list {
+            width:370px;
+            height:74px;
+        }
+        #problem_type_prompt {
+            width:370px;
+            height:74px;
+        }
+        #problem_type_sol_alg {
+            width:370px;
+            height:74px;
+        }
+    </style>
+<table>
+    <tr>
+        <td style="padding-right: 30px;">
+<h4 class = "button">{{=A('Back',_href=URL('default','teacher_interface'),_class='btn')}}</h4>
+<h2 class = "title" >Edit <span class = "name">{{=problem_type.name}}</span></h2>
+<br>
+<br>
+<br>
+            <h4 style = "padding-bottom: 10px;">
+                Note: Number of variables must stay the same! <br> To change the variables, you must delete and recreate the problem.
+            </h4>
+            {{=form}}
+        </td>
+        <td>
+            <h3>
+                Allowed Operations & Constants
+            </h3>
+            <table class = table_padding border=1.5 width = 680 style = "padding: 10px;">
+                <tr>
+                    <td><b>Operation/Constant</b></td>
+                    <td><b>Description</b></td>
+                </tr>
+                <tr>
+                    <td>E</td>
+                    <td>e</td>
+                </tr>
+                <tr>
+                    <td>PI</td>
+                    <td>π</td>
+                </tr>
+                <tr>
+                    <td>+</td>
+                    <td>Addition</td>
+                </tr>
+                <tr>
+                    <td>-</td>
+                    <td>Subtraction</td>
+                </tr>
+                <tr>
+                    <td>*</td>
+                    <td>Multiplication</td>
+                </tr>
+                <tr>
+                    <td>/</td>
+                    <td>Division</td>
+                </tr>
+                <tr>
+                    <td>%</td>
+                    <td>Modulus</td>
+                </tr>
+                <tr>
+                    <td>^</td>
+                    <td>Power</td>
+                </tr>
+                <tr>
+                    <td>sin(x)</td>
+                    <td>Sine of x (x is in radians)</td>
+                </tr>
+                <tr>
+                    <td>cos(x)</td>
+                    <td>Cosine of x (x is in radians)</td>
+                </tr>
+                <tr>
+                    <td>tan(x)</td>
+                    <td>Tangent of x (x is… well, you know)</td>
+                </tr>
+                <tr>
+                    <td>asin(x)</td>
+                    <td>Arc sine of x (in radians)</td>
+                </tr>
+                <tr>
+                    <td>acos(x)</td>
+                    <td>Arc cosine of x (in radians)</td>
+                </tr>
+                <tr>
+                    <td>atan(x)</td>
+                    <td>Arc tangent of x (in radians)</td>
+                </tr>
+                <tr>
+                    <td>sinh(x)</td>
+                    <td>Hyperbolic sine of x (x is in radians)</td>
+                </tr>
+                <tr>
+                    <td>cosh(x)</td>
+                    <td>Hyperbolic cosine of x (x is in radians)</td>
+                </tr>
+                <tr>
+                    <td>tanh(x)</td>
+                    <td>Hyperbolic tangent of x (x is… well, you know)</td>
+                </tr>
+                <tr>
+                    <td>asinh(x)</td>
+                    <td>Hyperbolic arc sine of x (in radians)</td>
+                </tr>
+                <tr>
+                    <td>acosh(x)</td>
+                    <td>Hyperbolic arc cosine of x (in radians)</td>
+                </tr>
+                <tr>
+                    <td>atanh(x)</td>
+                    <td>Hyperbolic arc tangent of x (in radians)</td>
+                </tr>
+                <tr>
+                    <td>degrees(x)</td>
+                    <td>Convert angle x from radians to degrees.</td>
+                </tr>
+                <tr>
+                    <td>radians(x)</td>
+                    <td>Convert angle x from degrees to radians.</td>
+                </tr>
+                <tr>
+                    <td>sqrt(x)</td>
+                    <td>Square root of x. Positive numbers only.</td>
+                </tr>
+                <tr>
+                    <td>ln(x)</td>
+                    <td>Natural logarithm of x (not base-10).</td>
+                </tr>
+                <tr>
+                    <td>log(x)</td>
+                    <td>Base-10 logarithm of x.</td>
+                </tr>
+                <tr>
+                    <td>abs(x)</td>
+                    <td>Absolute value (magnitude) of x</td>
+                </tr>
+                <tr>
+                    <td>ceil(x)</td>
+                    <td>Ceiling of x — the smallest integer that’s >= x.</td>
+                </tr>
+                <tr>
+                    <td>floor(x)</td>
+                    <td>Floor of x — the largest integer that’s <= x.</td>
+                </tr>
+                <tr>
+                    <td>round(x)</td>
+                    <td>X, rounded to the nearest integer</td>
+                </tr>
+                <tr>
+                    <td>trunc(x)</td>
+                    <td>Integral part of a X, looks like floor(x) unless for negative number.</td>
+                </tr>
+                <tr>
+                    <td>exp(x)</td>
+                    <td>ex (exponential/antilogarithm function with base e)</td>
+                </tr>
+                <tr>
+                    <td>fac(n)</td>
+                    <td>factorial of n</td>
+                </tr>
+
+            </table>
+        </td>
+    </tr>
+</table>

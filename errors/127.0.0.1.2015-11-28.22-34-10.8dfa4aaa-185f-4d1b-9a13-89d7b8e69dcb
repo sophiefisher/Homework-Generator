@@ -1,0 +1,564 @@
+(dp1
+S'output'
+p2
+S"<type 'exceptions.SyntaxError'> Set: no tables selected"
+p3
+sS'layer'
+p4
+S'/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/controllers/default.py'
+p5
+sS'code'
+p6
+S'import random\nimport expression_evaluator\n\nclass Problem(object):\n\n    def __init__(self,givens,sol_alg):\n        self.sol_alg=sol_alg\n        self.givens=givens\n\n    def get_solution(self):\n        #replace algorithm with givens\n        for i in range(len(self.givens)):\n            v = "v"  + str(i)\n            given = str(self.givens[i])\n            self.sol_alg=self.sol_alg.replace(v,given)\n\n        #insert parsing algorithm here\n        parser=expression_evaluator.Parser()\n        solution=parser.parse(self.sol_alg).evaluate({})\n        return solution\n\ndef user():\n    return dict(form=auth())\n\n@auth.requires_login()\ndef index():\n    return locals()\n\ndef student_interface():\n    student_record=db(db.student.email==auth.user.email).select().last()\n    my_courses=db(db.student_course.student_id==student_record.id).select()\n    problem_type_courses=db(db.problem_type_course).select()\n    #ditionary to associate problem types with classes\n    d={}\n    for r in problem_type_courses:\n        if not d.has_key(r.course_id):\n            d[r.course_id]=[]\n        d[r.course_id].append(r.problem_type_id)\n\n    score_records=db(db.user_score.user_id==auth.user.id).select()\n    problem_type_scores={}\n    for r in score_records:\n       problem_type_scores[r.problem_type_id]=r.num_solved\n    return locals()\n\ndef generator():\n\n    #session.jump_back=request.env.request_uri\n    problem_type=db.problem_type(request.args(0))\n    last_problem=db((db.problem.user_id==auth.user.id)&\\\n                    (db.problem.problem_type_id==problem_type)).select().last()\n    \n    #generate a new problem if no previous problems of this type exist\n    if last_problem is None:\n        #generate givens and add to list\n        \n        givens=[]\n        for i in range(problem_type.num_givens):\n            given=random.randint(1,20)\n            givens.append(given)\n\n        #generate problem prompt\n        prompt=problem_type.prompt%tuple(givens)\n\n        #create instance of Problem and its solution\n        problem=Problem(givens, problem_type.sol_alg)\n        solution=problem.get_solution()\n\n        #add problem and problem_givens to database\n        l=[]\n        problem_id=db.problem.insert(user_id=auth.user.id,problem_type_id=problem_type,answered=False,solution=solution)\n        for given in givens:\n            r=db.problem_given.insert(problem_id=problem_id,user_id=auth.user.id,problem_type_id=problem_type,given=given)\n            l.append(r)\n        #add score record to database for new problem\n        db.user_score.insert(user_id=auth.user.id,problem_type_id=problem_type.id,num_tries=0,num_solved=0)\n    \n    #pull last problem from the databse if the problem is not answered\n    elif last_problem.answered==False:\n        #pull last problem data from database\n        #generate list of problem_given records\n        given_records=db(db.problem_given.problem_id==last_problem).select()\n        #pull problem givens\n        givens = [r.given for r in given_records]\n        \n        prompt=problem_type.prompt%tuple(givens)\n        \n        problem=Problem(givens, problem_type.sol_alg)\n        solution=problem.get_solution()\n        \n    \n    #regenerate a new problem if the last problem is answered\n    elif last_problem.answered==True:\n        #generate givens and add to list\n        givens=[]\n        for i in range(problem_type.num_givens):\n            #if problem_type.name==\'addition\':\n            given=random.randint(1,20)\n            givens.append(given)\n\n        #create instance of Problem and its solution\n        problem=Problem(givens, problem_type.sol_alg)\n        solution=problem.get_solution()\n\n        #update problem.solution \n        last_problem.update_record(solution=solution)\n\n        #update problem_given records\n        #go through records where the problem type of the problem id == problem_type and where the givens match up\n        l = db((db.problem_given.user_id==auth.user.id)&\\\n                    (db.problem_given.problem_type_id==problem_type)).select()\n        for i in range(len(givens)):\n            l[i].update_record(given=givens[i])\n        prompt=problem_type.prompt%tuple(givens)\n        \n        #update problem answered\n        last_problem.update_record(answered=False)\n        \n\n    row = db((db.user_score.user_id==auth.user.id)&\\\n             (db.user_score.problem_type_id==problem_type.id)).select().first()\n    form=SQLFORM.factory(\n        Field(\'your_answer\',\'decimal(2,10)\'))\n    form[\'_style\']=\'border:4px solid black\'\n    correct_answer_button=False\n    #last_problem.update_record(answered=True)\n    \n    if form.process(onsuccess="thanks!").accepted and (form.vars.your_answer>.97*float(last_problem.solution) and form.vars.your_answer<1.03*float(last_problem.solution)):\n        row.update_record(num_tries=row.num_tries+1)\n        row.update_record(num_solved=row.num_solved+1)\n        #response.flash=\'Correct\'\n        correct_answer_button=True\n        last_problem.update_record(answered=True)\n        #redirect(URL(\'generator\'))\n    #elif conditions not working?\n    elif form.process(message_onsuccess="Incorrect! Try again :(",next=URL(\'generator\')).accepted and not (form.vars.your_answer>.97*float(last_problem.solution) and form.vars.your_answer<1.03*float(last_problem.solution)): \n    #form.vars.your_answer!=problem.get_solution():\n       row.update_record(num_tries=row.num_tries+1)\n       session.flash=\'Incorrect\'\n       #redirect(URL(\'generator\'))\n    return locals()\n\n\ndef teacher_interface():\n    session.jump_back=request.env.request_uri\n    my_problem_types = db(db.problem_type.teacher_id==auth.user.id).select()\n    problem_type_classes={}\n    for r in my_problem_types:\n        sec_one_classes=[]\n        classes=db((db.problem_type_course.problem_type_id==r.id)).select()\n        problem_type_classes[r.id]=classes\n    return locals()\n\n\ndef create_problem():\n    #course_query=(db.course.section==\'1\')\n    #db.problem_type.course_id.requires=IS_IN_DB(db(course_query),\n    #                                          db.course.id,\n    #                                          lambda r: db.course[r.id].name)\n    form=SQLFORM(db.problem_type)\n    form.vars.teacher_id=auth.user.id\n    if form.process().accepted:\n        session.flash=\'problem added!\'\n        redirect(URL(\'create_problem\'))\n    return locals()\n\n\ndef all_worksheets():\n    return locals()\n\ndef remove_class_problem_type():\n    rec = db.problem_type_course(request.args(0))\n    #r=db.problem_type_course(request.args(0))\n    records = db(db.problem_type_course.course_id.name==rec.course_id.name).select()\n    for r in records:\n        r.delete_record()\n    redirect(URL(\'teacher_interface\'))\n    \ndef add_problem_type_classes():\n    #course_query=(db.course.section==\'1\')\n    #db.problem_type.course_id.requires=IS_IN_DB(db(course_query),\n    #                                          db.course.id,\n    #                                          lambda r: db.course[r.id].name)\n    \n    \n    problem_type = db.problem_type(request.args(0))\n    problem_type_courses=db(db.problem_type_course.problem_type_id==problem_type.id).select()\n    courses=[]\n    for r in problem_type_courses:\n        courses.append(r.course_id)\n    all_courses=db(db.course).select()\n    available_courses=[course.id for course in all_courses if course.id not in courses]\n    \n    c_query=((db.course.id.belongs(available_courses)) & (db.course.section==\'1\'))\n    \n    db.problem_type_course.course_id.requires=IS_IN_DB(db(c_query),db.course.id,lambda r: db.course[r.id].name)\n    form=SQLFORM.factory(Field(\'course_id\', \'reference course\',requires=IS_IN_DB(db(c_query),db.course.id,"%(name)s")),\n                 labels={\'course_id\':\'Class\'})\n    \n    if form.process().accepted:\n        course_selected = db(db.course.id == form.vars.course_id).select().first()\n        all_sections = db(db.course.name==course_selected.name).select()\n        for r in all_sections:\n            db.problem_type_course.insert(problem_type_id=problem_type.id,\n                                          course_id=r.id)\n            db.commit()\n        session.flash=all_sections\n        redirect(URL(\'default\',\'add_problem_type_classes\',args=problem_type.id))\n    return locals()\n\nresponse._vars=response._caller(remove_class_problem_type)\n'
+p7
+sS'snapshot'
+p8
+(dp9
+S'exception'
+p10
+(dp11
+S'__getslice__'
+p12
+S"<method-wrapper '__getslice__' of exceptions.SyntaxError object>"
+p13
+sS'text'
+p14
+S'None'
+p15
+sS'__str__'
+p16
+S"<method-wrapper '__str__' of exceptions.SyntaxError object>"
+p17
+sS'__reduce__'
+p18
+S'<built-in method __reduce__ of exceptions.SyntaxError object>'
+p19
+sS'__dict__'
+p20
+S'{}'
+p21
+sS'__sizeof__'
+p22
+S'<built-in method __sizeof__ of exceptions.SyntaxError object>'
+p23
+sS'__init__'
+p24
+S"<method-wrapper '__init__' of exceptions.SyntaxError object>"
+p25
+sS'__setattr__'
+p26
+S"<method-wrapper '__setattr__' of exceptions.SyntaxError object>"
+p27
+sS'__reduce_ex__'
+p28
+S'<built-in method __reduce_ex__ of exceptions.SyntaxError object>'
+p29
+sS'__new__'
+p30
+S'<built-in method __new__ of type object>'
+p31
+sS'__format__'
+p32
+S'<built-in method __format__ of exceptions.SyntaxError object>'
+p33
+sS'__class__'
+p34
+S"<type 'exceptions.SyntaxError'>"
+p35
+sS'filename'
+p36
+S'None'
+p37
+sS'lineno'
+p38
+S'None'
+p39
+sS'msg'
+p40
+S"'Set: no tables selected'"
+p41
+sS'__doc__'
+p42
+S"'Invalid syntax.'"
+p43
+sS'__getitem__'
+p44
+S"<method-wrapper '__getitem__' of exceptions.SyntaxError object>"
+p45
+sS'__setstate__'
+p46
+S'<built-in method __setstate__ of exceptions.SyntaxError object>'
+p47
+sS'__getattribute__'
+p48
+S"<method-wrapper '__getattribute__' of exceptions.SyntaxError object>"
+p49
+sS'print_file_and_line'
+p50
+S'None'
+p51
+sS'args'
+p52
+S"('Set: no tables selected',)"
+p53
+sS'__subclasshook__'
+p54
+S'<built-in method __subclasshook__ of type object>'
+p55
+sS'offset'
+p56
+S'None'
+p57
+sS'__unicode__'
+p58
+S'<built-in method __unicode__ of exceptions.SyntaxError object>'
+p59
+sS'__delattr__'
+p60
+S"<method-wrapper '__delattr__' of exceptions.SyntaxError object>"
+p61
+sS'__repr__'
+p62
+S"<method-wrapper '__repr__' of exceptions.SyntaxError object>"
+p63
+sS'__hash__'
+p64
+S"<method-wrapper '__hash__' of exceptions.SyntaxError object>"
+p65
+ssS'evalue'
+p66
+S'Set: no tables selected'
+p67
+sS'request'
+p68
+cgluon.html
+XML_unpickle
+p69
+(S's\xe5d\x00\x00<div><table><tr><td style="font-weight:bold;vertical-align:top;">ajax</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">application</td><td style="vertical-align:top;">:</td><td><div>Worksheet_App</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">args</td><td style="vertical-align:top;">:</td><td><div><table><tr><td><div>116</div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">cid</td><td style="vertical-align:top;">:</td><td><div>None</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">client</td><td style="vertical-align:top;">:</td><td><div>127.0.0.1</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">controller</td><td style="vertical-align:top;">:</td><td><div>default</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">cookies</td><td style="vertical-align:top;">:</td><td><div><table><tr><td style="font-weight:bold;vertical-align:top;">session_id_admin</td><td style="vertical-align:top;">:</td><td><div>127.0.0.1-959f5a82-1d8d-4550-bba2-ac8cd7a74c37<table><tr><td style="font-weight:bold;vertical-align:top;">comment</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">domain</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">expires</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">httponly</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">max-age</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">path</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">secure</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">version</td><td style="vertical-align:top;">:</td><td><div></div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_id_welcome</td><td style="vertical-align:top;">:</td><td><div>127.0.0.1-e2567523-2f31-4eb6-b1a1-407107b04cbb<table><tr><td style="font-weight:bold;vertical-align:top;">comment</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">domain</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">expires</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">httponly</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">max-age</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">path</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">secure</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">version</td><td style="vertical-align:top;">:</td><td><div></div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_id_worksheet_app</td><td style="vertical-align:top;">:</td><td><div>127.0.0.1-5f4d1b9b-a116-4622-99d5-966cf1dd835d<table><tr><td style="font-weight:bold;vertical-align:top;">comment</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">domain</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">expires</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">httponly</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">max-age</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">path</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">secure</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">version</td><td style="vertical-align:top;">:</td><td><div></div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_id_workshop_manager</td><td style="vertical-align:top;">:</td><td><div>127.0.0.1-2a1e2203-4f0a-4fa5-a57d-0e4b3ee36255<table><tr><td style="font-weight:bold;vertical-align:top;">comment</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">domain</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">expires</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">httponly</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">max-age</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">path</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">secure</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">version</td><td style="vertical-align:top;">:</td><td><div></div></td></tr></table></div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">env</td><td style="vertical-align:top;">:</td><td><div><table><tr><td style="font-weight:bold;vertical-align:top;">HTTP_ACCEPT</td><td style="vertical-align:top;">:</td><td><div>text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">HTTP_ACCEPT_ENCODING</td><td style="vertical-align:top;">:</td><td><div>gzip, deflate, sdch</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">HTTP_ACCEPT_LANGUAGE</td><td style="vertical-align:top;">:</td><td><div>en-US,en;q=0.8</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">HTTP_CONNECTION</td><td style="vertical-align:top;">:</td><td><div>keep-alive</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">HTTP_COOKIE</td><td style="vertical-align:top;">:</td><td><div>session_id_welcome=127.0.0.1-e2567523-2f31-4eb6-b1a1-407107b04cbb; session_id_workshop_manager=127.0.0.1-2a1e2203-4f0a-4fa5-a57d-0e4b3ee36255; session_id_admin=127.0.0.1-959f5a82-1d8d-4550-bba2-ac8cd7a74c37; session_id_worksheet_app=127.0.0.1-5f4d1b9b-a116-4622-99d5-966cf1dd835d</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">HTTP_HOST</td><td style="vertical-align:top;">:</td><td><div>127.0.0.1:8000</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">HTTP_REFERER</td><td style="vertical-align:top;">:</td><td><div>http://127.0.0.1:8000/Worksheet_App/default/teacher_interface</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">HTTP_UPGRADE_INSECURE_REQUESTS</td><td style="vertical-align:top;">:</td><td><div>1</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">HTTP_USER_AGENT</td><td style="vertical-align:top;">:</td><td><div>Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.86 Safari/537.36</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">PATH_INFO</td><td style="vertical-align:top;">:</td><td><div>/Worksheet_App/default/remove_class_problem_type/116</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">QUERY_STRING</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">REMOTE_ADDR</td><td style="vertical-align:top;">:</td><td><div>127.0.0.1</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">REMOTE_PORT</td><td style="vertical-align:top;">:</td><td><div>59446</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">REQUEST_METHOD</td><td style="vertical-align:top;">:</td><td><div>GET</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">SCRIPT_NAME</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">SERVER_NAME</td><td style="vertical-align:top;">:</td><td><div>Sophies-MBP</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">SERVER_PORT</td><td style="vertical-align:top;">:</td><td><div>8000</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">SERVER_PROTOCOL</td><td style="vertical-align:top;">:</td><td><div>HTTP/1.1</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">SERVER_SOFTWARE</td><td style="vertical-align:top;">:</td><td><div>Rocket 1.2.6</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">app_folders</td><td style="vertical-align:top;">:</td><td><div>set([&#x27;/Applications/web2py.app/Contents/Resources/applications/workshop_manager/&#x27;, &#x27;/Applications/web2py.app/Contents/Resources/applications/admin/&#x27;, &#x27;/Applications/web2py.app/Contents/Resources/applications/welcome/&#x27;, &#x27;/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/&#x27;])</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">applications_parent</td><td style="vertical-align:top;">:</td><td><div>/Applications/web2py.app/Contents/Resources</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">cmd_args</td><td style="vertical-align:top;">:</td><td><div><table></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">cmd_options</td><td style="vertical-align:top;">:</td><td><div>&lt;Values at 0x105eace60: {&#x27;verbose&#x27;: False, &#x27;ip&#x27;: &#x27;127.0.0.1&#x27;, &#x27;debuglevel&#x27;: 30, &#x27;with_scheduler&#x27;: False, &#x27;ips&#x27;: [], &#x27;shutdown_timeout&#x27;: 5, &#x27;taskbar&#x27;: False, &#x27;with_coverage&#x27;: False, &#x27;scheduler_groups&#x27;: None, &#x27;port&#x27;: 8000, &#x27;maxthreads&#x27;: None, &#x27;softcron&#x27;: False, &#x27;server_name&#x27;: &#x27;Sophies-MBP&#x27;, &#x27;bpython&#x27;: False, &#x27;nogui&#x27;: False, &#x27;pid_filename&#x27;: &#x27;httpserver.pid&#x27;, &#x27;extcron&#x27;: False, &#x27;runcron&#x27;: False, &#x27;run_system_tests&#x27;: False, &#x27;test&#x27;: None, &#x27;folder&#x27;: &#x27;/Applications/web2py.app/Contents/Resources&#x27;, &#x27;config&#x27;: &#x27;&#x27;, &#x27;minthreads&#x27;: None, &#x27;shell&#x27;: None, &#x27;run&#x27;: &#x27;&#x27;, &#x27;log_filename&#x27;: &#x27;httpserver.log&#x27;, &#x27;profiler_dir&#x27;: None, &#x27;args&#x27;: [&#x27;&#x27;], &#x27;socket_timeout&#x27;: 5, &#x27;ssl_ca_certificate&#x27;: None, &#x27;scheduler&#x27;: None, &#x27;interfaces&#x27;: None, &#x27;ssl_private_key&#x27;: &#x27;&#x27;, &#x27;gae&#x27;: None, &#x27;password&#x27;: &#x27;&lt;ask&gt;&#x27;, &#x27;request_queue_size&#x27;: 5, &#x27;ssl_certificate&#x27;: &#x27;&#x27;, &#x27;cronjob&#x27;: False, &#x27;numthreads&#x27;: None, &#x27;quiet&#x27;: False, &#x27;import_models&#x27;: False, &#x27;timeout&#x27;: 10, &#x27;plain&#x27;: False, &#x27;nobanner&#x27;: False}&gt;</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">db_sessions</td><td style="vertical-align:top;">:</td><td><div>set([])</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">debugging</td><td style="vertical-align:top;">:</td><td><div>True</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">gluon_parent</td><td style="vertical-align:top;">:</td><td><div>/Applications/web2py.app/Contents/Resources</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">http_accept</td><td style="vertical-align:top;">:</td><td><div>text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">http_accept_encoding</td><td style="vertical-align:top;">:</td><td><div>gzip, deflate, sdch</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">http_accept_language</td><td style="vertical-align:top;">:</td><td><div>en-US,en;q=0.8</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">http_connection</td><td style="vertical-align:top;">:</td><td><div>keep-alive</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">http_cookie</td><td style="vertical-align:top;">:</td><td><div>session_id_welcome=127.0.0.1-e2567523-2f31-4eb6-b1a1-407107b04cbb; session_id_workshop_manager=127.0.0.1-2a1e2203-4f0a-4fa5-a57d-0e4b3ee36255; session_id_admin=127.0.0.1-959f5a82-1d8d-4550-bba2-ac8cd7a74c37; session_id_worksheet_app=127.0.0.1-5f4d1b9b-a116-4622-99d5-966cf1dd835d</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">http_host</td><td style="vertical-align:top;">:</td><td><div>127.0.0.1:8000</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">http_referer</td><td style="vertical-align:top;">:</td><td><div>http://127.0.0.1:8000/Worksheet_App/default/teacher_interface</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">http_upgrade_insecure_requests</td><td style="vertical-align:top;">:</td><td><div>1</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">http_user_agent</td><td style="vertical-align:top;">:</td><td><div>Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.86 Safari/537.36</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">is_jython</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">is_pypy</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">is_source</td><td style="vertical-align:top;">:</td><td><div>True</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">local_hosts</td><td style="vertical-align:top;">:</td><td><div><table><tr><td><div>192.168.1.208</div></td></tr><tr><td><div>::ffff:127.0.0.1</div></td></tr><tr><td><div>::1</div></td></tr><tr><td><div>208.1.168.192.in-addr.arpa</div></td></tr><tr><td><div>Sophies-MBP</div></td></tr><tr><td><div>127.0.0.1</div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">path_info</td><td style="vertical-align:top;">:</td><td><div>/Worksheet_App/default/remove_class_problem_type/116</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">query_string</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">remote_addr</td><td style="vertical-align:top;">:</td><td><div>127.0.0.1</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">remote_port</td><td style="vertical-align:top;">:</td><td><div>59446</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">request_method</td><td style="vertical-align:top;">:</td><td><div>GET</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">request_uri</td><td style="vertical-align:top;">:</td><td><div>/Worksheet_App/default/remove_class_problem_type/116</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">script_name</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">server_name</td><td style="vertical-align:top;">:</td><td><div>Sophies-MBP</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">server_port</td><td style="vertical-align:top;">:</td><td><div>8000</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">server_protocol</td><td style="vertical-align:top;">:</td><td><div>HTTP/1.1</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">server_software</td><td style="vertical-align:top;">:</td><td><div>Rocket 1.2.6</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">web2py_path</td><td style="vertical-align:top;">:</td><td><div>/Applications/web2py.app/Contents/Resources</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">web2py_version</td><td style="vertical-align:top;">:</td><td><div>2.9.6-stable+timestamp.2014.09.02.01.57.55</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi.errors</td><td style="vertical-align:top;">:</td><td><div>&lt;open file &#x27;&lt;stderr&gt;&#x27;, mode &#x27;w&#x27; at 0x10005b270&gt;</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi.file_wrapper</td><td style="vertical-align:top;">:</td><td><div>&lt;class wsgiref.util.FileWrapper at 0x105e58e20&gt;</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi.input</td><td style="vertical-align:top;">:</td><td><div>&lt;socket._fileobject object at 0x10a2e0ed0&gt;</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi.multiprocess</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi.multithread</td><td style="vertical-align:top;">:</td><td><div>True</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi.run_once</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi.url_scheme</td><td style="vertical-align:top;">:</td><td><div>http</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi.version</td><td style="vertical-align:top;">:</td><td><div><table><tr><td><div>1</div></td></tr><tr><td><div>0</div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi_errors</td><td style="vertical-align:top;">:</td><td><div>&lt;open file &#x27;&lt;stderr&gt;&#x27;, mode &#x27;w&#x27; at 0x10005b270&gt;</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi_file_wrapper</td><td style="vertical-align:top;">:</td><td><div>&lt;class wsgiref.util.FileWrapper at 0x105e58e20&gt;</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi_input</td><td style="vertical-align:top;">:</td><td><div>&lt;socket._fileobject object at 0x10a2e0ed0&gt;</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi_multiprocess</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi_multithread</td><td style="vertical-align:top;">:</td><td><div>True</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi_run_once</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi_url_scheme</td><td style="vertical-align:top;">:</td><td><div>http</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi_version</td><td style="vertical-align:top;">:</td><td><div><table><tr><td><div>1</div></td></tr><tr><td><div>0</div></td></tr></table></div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">extension</td><td style="vertical-align:top;">:</td><td><div>html</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">folder</td><td style="vertical-align:top;">:</td><td><div>/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">function</td><td style="vertical-align:top;">:</td><td><div>remove_class_problem_type</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">global_settings</td><td style="vertical-align:top;">:</td><td><div><table><tr><td style="font-weight:bold;vertical-align:top;">app_folders</td><td style="vertical-align:top;">:</td><td><div>set([&#x27;/Applications/web2py.app/Contents/Resources/applications/workshop_manager/&#x27;, &#x27;/Applications/web2py.app/Contents/Resources/applications/admin/&#x27;, &#x27;/Applications/web2py.app/Contents/Resources/applications/welcome/&#x27;, &#x27;/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/&#x27;])</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">applications_parent</td><td style="vertical-align:top;">:</td><td><div>/Applications/web2py.app/Contents/Resources</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">cmd_args</td><td style="vertical-align:top;">:</td><td><div><table></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">cmd_options</td><td style="vertical-align:top;">:</td><td><div>&lt;Values at 0x105eace60: {&#x27;verbose&#x27;: False, &#x27;ip&#x27;: &#x27;127.0.0.1&#x27;, &#x27;debuglevel&#x27;: 30, &#x27;with_scheduler&#x27;: False, &#x27;ips&#x27;: [], &#x27;shutdown_timeout&#x27;: 5, &#x27;taskbar&#x27;: False, &#x27;with_coverage&#x27;: False, &#x27;scheduler_groups&#x27;: None, &#x27;port&#x27;: 8000, &#x27;maxthreads&#x27;: None, &#x27;softcron&#x27;: False, &#x27;server_name&#x27;: &#x27;Sophies-MBP&#x27;, &#x27;bpython&#x27;: False, &#x27;nogui&#x27;: False, &#x27;pid_filename&#x27;: &#x27;httpserver.pid&#x27;, &#x27;extcron&#x27;: False, &#x27;runcron&#x27;: False, &#x27;run_system_tests&#x27;: False, &#x27;test&#x27;: None, &#x27;folder&#x27;: &#x27;/Applications/web2py.app/Contents/Resources&#x27;, &#x27;config&#x27;: &#x27;&#x27;, &#x27;minthreads&#x27;: None, &#x27;shell&#x27;: None, &#x27;run&#x27;: &#x27;&#x27;, &#x27;log_filename&#x27;: &#x27;httpserver.log&#x27;, &#x27;profiler_dir&#x27;: None, &#x27;args&#x27;: [&#x27;&#x27;], &#x27;socket_timeout&#x27;: 5, &#x27;ssl_ca_certificate&#x27;: None, &#x27;scheduler&#x27;: None, &#x27;interfaces&#x27;: None, &#x27;ssl_private_key&#x27;: &#x27;&#x27;, &#x27;gae&#x27;: None, &#x27;password&#x27;: &#x27;&lt;ask&gt;&#x27;, &#x27;request_queue_size&#x27;: 5, &#x27;ssl_certificate&#x27;: &#x27;&#x27;, &#x27;cronjob&#x27;: False, &#x27;numthreads&#x27;: None, &#x27;quiet&#x27;: False, &#x27;import_models&#x27;: False, &#x27;timeout&#x27;: 10, &#x27;plain&#x27;: False, &#x27;nobanner&#x27;: False}&gt;</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">db_sessions</td><td style="vertical-align:top;">:</td><td><div>set([])</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">debugging</td><td style="vertical-align:top;">:</td><td><div>True</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">gluon_parent</td><td style="vertical-align:top;">:</td><td><div>/Applications/web2py.app/Contents/Resources</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">is_jython</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">is_pypy</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">is_source</td><td style="vertical-align:top;">:</td><td><div>True</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">local_hosts</td><td style="vertical-align:top;">:</td><td><div><table><tr><td><div>192.168.1.208</div></td></tr><tr><td><div>::ffff:127.0.0.1</div></td></tr><tr><td><div>::1</div></td></tr><tr><td><div>208.1.168.192.in-addr.arpa</div></td></tr><tr><td><div>Sophies-MBP</div></td></tr><tr><td><div>127.0.0.1</div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">web2py_version</td><td style="vertical-align:top;">:</td><td><div>2.9.6-stable+timestamp.2014.09.02.01.57.55</div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">is_https</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">is_local</td><td style="vertical-align:top;">:</td><td><div>True</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">is_restful</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">is_sheduler</td><td style="vertical-align:top;">:</td><td><div>None</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">is_shell</td><td style="vertical-align:top;">:</td><td><div>None</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">now</td><td style="vertical-align:top;">:</td><td><div>datetime.datetime(2015, 11, 28, 22, 34, 10, 706263)</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">raw_args</td><td style="vertical-align:top;">:</td><td><div>116</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">raw_extension</td><td style="vertical-align:top;">:</td><td><div>None</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">url</td><td style="vertical-align:top;">:</td><td><div>/Worksheet_App/default/remove_class_problem_type/116</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">utcnow</td><td style="vertical-align:top;">:</td><td><div>datetime.datetime(2015, 11, 29, 3, 34, 10, 706274)</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">uuid</td><td style="vertical-align:top;">:</td><td><div>Worksheet_App/127.0.0.1.2015-11-28.22-34-10.8dfa4aaa-185f-4d1b-9a13-89d7b8e69dcb</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">wsgi</td><td style="vertical-align:top;">:</td><td><div>&lt;gluon.main.LazyWSGI object at 0x10a101fd0&gt;</div></td></tr></table></div>'
+tRp70
+sS'frames'
+p71
+(lp72
+(dp73
+S'file'
+p74
+S'/Applications/web2py.app/Contents/Resources/gluon/restricted.py'
+p75
+sS'dump'
+p76
+(dp77
+sS'lnum'
+p78
+I221
+sS'lines'
+p79
+(dp80
+I224
+S'    except RestrictedError:'
+p81
+sI225
+S'        # do not encapsulate (obfuscate) the original RestrictedError'
+p82
+sI216
+S'    try:'
+p83
+sI217
+S'        if isinstance(code, types.CodeType):'
+p84
+sI218
+S'            ccode = code'
+p85
+sI219
+S'        else:'
+p86
+sI220
+S'            ccode = compile2(code, layer)'
+p87
+sI221
+S'        exec ccode in environment'
+p88
+sI222
+S'    except HTTP:'
+p89
+sI223
+S'        raise'
+p90
+ssS'call'
+p91
+S"(code='import random\\nimport expression_evaluator\\n\\nclass...vars=response._caller(remove_class_problem_type)\\n', environment={'A': <class 'gluon.html.A'>, 'ANY_OF': <class 'gluon.validators.ANY_OF'>, 'Auth': <class 'gluon.tools.Auth'>, 'B': <class 'gluon.html.B'>, 'BEAUTIFY': <class 'gluon.html.BEAUTIFY'>, 'BODY': <class 'gluon.html.BODY'>, 'BR': <class 'gluon.html.BR'>, 'BUTTON': <class 'gluon.html.BUTTON'>, 'CAT': <class 'gluon.html.CAT'>, 'CENTER': <class 'gluon.html.CENTER'>, ...}, layer='/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/controllers/default.py')"
+p92
+sS'func'
+p93
+S'restricted'
+p94
+sa(dp95
+g74
+S'/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/controllers/default.py'
+p96
+sg76
+(dp97
+sg78
+I211
+sg79
+(dp98
+I200
+S'    if form.process().accepted:'
+p99
+sI201
+S'        course_selected = db(db.course.id == form.vars.course_id).select().first()'
+p100
+sI202
+S'        all_sections = db(db.course.name==course_selected.name).select()'
+p101
+sI203
+S'        for r in all_sections:'
+p102
+sI204
+S'            db.problem_type_course.insert(problem_type_id=problem_type.id,'
+p103
+sI205
+S'                                          course_id=r.id)'
+p104
+sI206
+S'            db.commit()'
+p105
+sI207
+S'        session.flash=all_sections'
+p106
+sI208
+S"        redirect(URL('default','add_problem_type_classes',args=problem_type.id))"
+p107
+sI209
+S'    return locals()'
+p108
+ssg91
+S'()'
+p109
+sg93
+S'<module>'
+p110
+sa(dp111
+g74
+S'/Applications/web2py.app/Contents/Resources/gluon/globals.py'
+p112
+sg76
+(dp113
+sg78
+I388
+sg79
+(dp114
+I384
+S'        self.meta = Storage()      # used by web2py_ajax.html'
+p115
+sI385
+S'        self.menu = []             # used by the default view layout'
+p116
+sI386
+S'        self.files = []            # used by web2py_ajax.html'
+p117
+sI387
+S'        self._vars = None'
+p118
+sI388
+S'        self._caller = lambda f: f()'
+p119
+sI389
+S'        self._view_environment = None'
+p120
+sI390
+S'        self._custom_commit = None'
+p121
+sI391
+S'        self._custom_rollback = None'
+p122
+sI392
+S"        self.generic_patterns = ['*']"
+p123
+sI383
+S"        self.flash = ''            # used by the default view layout"
+p124
+ssg91
+S'(f=<function remove_class_problem_type>)'
+p125
+sg93
+S'<lambda>'
+p126
+sa(dp127
+g74
+S'/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/controllers/default.py'
+p128
+sg76
+(dp129
+sg78
+I174
+sg79
+(dp130
+I169
+S'    return locals()'
+p131
+sI170
+S''
+sI171
+S'def remove_class_problem_type():'
+p132
+sI172
+S'    rec = db.problem_type_course(request.args(0))'
+p133
+sI173
+S'    #r=db.problem_type_course(request.args(0))'
+p134
+sI174
+S'    records = db(db.problem_type_course.course_id.name==rec.course_id.name).select()'
+p135
+sI175
+S'    for r in records:'
+p136
+sI176
+S'        r.delete_record()'
+p137
+sI177
+S"    redirect(URL('teacher_interface'))"
+p138
+sI178
+S''
+ssg91
+S'()'
+p139
+sg93
+S'remove_class_problem_type'
+p140
+sa(dp141
+g74
+S'/Applications/web2py.app/Contents/Resources/gluon/dal.py'
+p142
+sg76
+(dp143
+sg78
+I10718
+sg79
+(dp144
+I10720
+S'    def nested_select(self, *fields, **attributes):'
+p145
+sI10721
+S'        return Expression(self.db, self._select(*fields, **attributes))'
+p146
+sI10722
+S''
+sI10713
+S"                                    attributes.get('join', None),"
+p147
+sI10714
+S"                                    attributes.get('left', None),"
+p148
+sI10715
+S"                                    attributes.get('orderby', None),"
+p149
+sI10716
+S"                                    attributes.get('groupby', None))"
+p150
+sI10717
+S'        fields = adapter.expand_all(fields, tablenames)'
+p151
+sI10718
+S'        return adapter.select(self.query, fields, attributes)'
+p152
+sI10719
+S''
+ssg91
+S'(self=<Set 0>, *fields=[], **attributes={})'
+p153
+sg93
+S'select'
+p154
+sa(dp155
+g74
+S'/Applications/web2py.app/Contents/Resources/gluon/dal.py'
+p156
+sg76
+(dp157
+sg78
+I2465
+sg79
+(dp158
+I2464
+S"            self.execute('BEGIN IMMEDIATE TRANSACTION;')"
+p159
+sI2465
+S'        return super(SQLiteAdapter, self).select(query, fields, attributes)'
+p160
+sI2466
+S''
+sI2467
+S''
+sI2468
+S'class SpatiaLiteAdapter(SQLiteAdapter):'
+p161
+sI2469
+S"    drivers = ('sqlite3', 'sqlite2')"
+p162
+sI2460
+S'        Note that the entire database, rather than one record, is locked'
+p163
+sI2461
+S'        (it will be locked eventually anyway by the following UPDATE).'
+p164
+sI2462
+S'        """'
+p165
+sI2463
+S"        if attributes.get('for_update', False) and not 'cache' in attributes:"
+p166
+ssg91
+S'(self=<gluon.dal.SQLiteAdapter object>, query=False, fields=[], attributes={})'
+p167
+sg93
+g154
+sa(dp168
+g74
+S'/Applications/web2py.app/Contents/Resources/gluon/dal.py'
+p169
+sg76
+(dp170
+sg78
+I1862
+sg79
+(dp171
+I1857
+S''
+sI1858
+S'    def select(self, query, fields, attributes):'
+p172
+sI1859
+S'        """'
+p173
+sI1860
+S'        Always returns a Rows object, possibly empty.'
+p174
+sI1861
+S'        """'
+p175
+sI1862
+S'        sql = self._select(query, fields, attributes)'
+p176
+sI1863
+S"        cache = attributes.get('cache', None)"
+p177
+sI1864
+S"        if cache and attributes.get('cacheable', False):"
+p178
+sI1865
+S"            del attributes['cache']"
+p179
+sI1866
+S'            (cache_model, time_expire) = cache'
+p180
+ssg91
+S'(self=<gluon.dal.SQLiteAdapter object>, query=False, fields=[], attributes={})'
+p181
+sg93
+g154
+sa(dp182
+g74
+S'/Applications/web2py.app/Contents/Resources/gluon/dal.py'
+p183
+sg76
+(dp184
+sg78
+I1698
+sg79
+(dp185
+I1696
+S''
+sI1697
+S'        if len(tablenames) < 1:'
+p186
+sI1698
+S"            raise SyntaxError('Set: no tables selected')"
+p187
+sI1699
+S''
+sI1700
+S'        def colexpand(field):'
+p188
+sI1701
+S'            return self.expand(field, colnames=True)'
+p189
+sI1702
+S''
+sI1693
+S'            for tablename in tables(field):'
+p190
+sI1694
+S'                if not tablename in tablenames:'
+p191
+sI1695
+S'                    tablenames.append(tablename)'
+p192
+ssg91
+S'(self=<gluon.dal.SQLiteAdapter object>, query=False, fields=[], attributes={})'
+p193
+sg93
+S'_select'
+p194
+sasS'pyver'
+p195
+S'Python 2.7.3: /Applications/web2py.app/Contents/MacOS/python (prefix: /Applications/web2py.app/Contents/Resources)'
+p196
+sS'session'
+p197
+g69
+(S'sF\x0b\x00\x00<div><table><tr><td style="font-weight:bold;vertical-align:top;">auth</td><td style="vertical-align:top;">:</td><td><div><table><tr><td style="font-weight:bold;vertical-align:top;">expiration</td><td style="vertical-align:top;">:</td><td><div>3600</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">hmac_key</td><td style="vertical-align:top;">:</td><td><div>22f5f633-e5a1-4c9d-a551-aec357025d1f</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">last_visit</td><td style="vertical-align:top;">:</td><td><div>datetime.datetime(2015, 11, 28, 22, 31, 10, 122452)</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">remember_me</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">user</td><td style="vertical-align:top;">:</td><td><div><table><tr><td style="font-weight:bold;vertical-align:top;">email</td><td style="vertical-align:top;">:</td><td><div>sfisher@agnesirwin.org</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">first_name</td><td style="vertical-align:top;">:</td><td><div>Sophie</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">id</td><td style="vertical-align:top;">:</td><td><div>5L</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">last_name</td><td style="vertical-align:top;">:</td><td><div>Fisher</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">registration_id</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">registration_key</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">reset_password_key</td><td style="vertical-align:top;">:</td><td><div></div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">user_groups</td><td style="vertical-align:top;">:</td><td><div><table><tr><td style="font-weight:bold;vertical-align:top;">3</td><td style="vertical-align:top;">:</td><td><div>teacher</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">5</td><td style="vertical-align:top;">:</td><td><div>student</div></td></tr></table></div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">flash</td><td style="vertical-align:top;">:</td><td><div>None</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">jump_back</td><td style="vertical-align:top;">:</td><td><div>/Worksheet_App/default/teacher_interface</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">last_orderby</td><td style="vertical-align:top;">:</td><td><div>None</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">last_query</td><td style="vertical-align:top;">:</td><td><div>db.problem_type_course.id&gt;0</div></td></tr></table></div>'
+tRp198
+sS'etype'
+p199
+S"<type 'exceptions.SyntaxError'>"
+p200
+sS'date'
+p201
+S'Sat Nov 28 22:34:10 2015'
+p202
+sS'response'
+p203
+g69
+(S'sY3\x00\x00<div><table><tr><td style="font-weight:bold;vertical-align:top;">body</td><td style="vertical-align:top;">:</td><td><div>&lt;cStringIO.StringO object at 0x10a4738b8&gt;</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">cookies</td><td style="vertical-align:top;">:</td><td><div><table><tr><td style="font-weight:bold;vertical-align:top;">session_id_worksheet_app</td><td style="vertical-align:top;">:</td><td><div>127.0.0.1-5f4d1b9b-a116-4622-99d5-966cf1dd835d<table><tr><td style="font-weight:bold;vertical-align:top;">comment</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">domain</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">expires</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">httponly</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">max-age</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">path</td><td style="vertical-align:top;">:</td><td><div>/</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">secure</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">version</td><td style="vertical-align:top;">:</td><td><div></div></td></tr></table></div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">delimiters</td><td style="vertical-align:top;">:</td><td><div><table><tr><td><div>{{</div></td></tr><tr><td><div>}}</div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">files</td><td style="vertical-align:top;">:</td><td><div><table></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">flash</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">form_label_separator</td><td style="vertical-align:top;">:</td><td><div>: </div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">formstyle</td><td style="vertical-align:top;">:</td><td><div>table3cols</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">generic_patterns</td><td style="vertical-align:top;">:</td><td><div><table><tr><td><div>*</div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">google_analytics_id</td><td style="vertical-align:top;">:</td><td><div>None</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">headers</td><td style="vertical-align:top;">:</td><td><div><table><tr><td style="font-weight:bold;vertical-align:top;">X-Powered-By</td><td style="vertical-align:top;">:</td><td><div>web2py</div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">logo</td><td style="vertical-align:top;">:</td><td><div><a class="brand" href="http://www.web2py.com/"><b>web<span>2</span>py</b>&trade;&nbsp;</a></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">menu</td><td style="vertical-align:top;">:</td><td><div><table><tr><td><div><table><tr><td><div>Home</div></td></tr><tr><td><div>False</div></td></tr><tr><td><div>/Worksheet_App/default/index</div></td></tr><tr><td><div><table></table></div></td></tr></table></div></td></tr><tr><td><div><table><tr><td><div><span class="highlighted">web2py</span></div></td></tr><tr><td><div>False</div></td></tr><tr><td><div>http://web2py.com</div></td></tr><tr><td><div><table><tr><td><div><table><tr><td><div>My Sites</div></td></tr><tr><td><div>False</div></td></tr><tr><td><div>/admin/default/site</div></td></tr></table></div></td></tr><tr><td><div><table><tr><td><div>This App</div></td></tr><tr><td><div>False</div></td></tr><tr><td><div>/admin/default/design/Worksheet_App</div></td></tr><tr><td><div>[(&lt;lazyT &#x27;Controller&#x27;&gt;, False, &#x27;/admin/default/edit/Worksheet_App/controllers/default.py&#x27;), (&lt;lazyT &#x27;View&#x27;&gt;, False, &#x27;/admin/default/edit/Worksheet_App/views/default/remove_class_problem_type.html&#x27;), (&lt;lazyT &#x27;Layout&#x27;&gt;, False, &#x27;/admin/default/edit/Worksheet_App/views/layout.html&#x27;), (&lt;lazyT &#x27;Stylesheet&#x27;&gt;, False, &#x27;/admin/default/edit/Worksheet_App/static/css/web2py.css&#x27;), (&lt;lazyT &#x27;DB Model&#x27;&gt;, False, &#x27;/admin/default/edit/Worksheet_App/models/db.py&#x27;), (&lt;lazyT &#x27;Menu Model&#x27;&gt;, False, &#x27;/admin/default/edit/Worksheet_App/models/menu.py&#x27;), (&lt;lazyT &#x27;Database&#x27;&gt;, False, &#x27;/Worksheet_App/appadmin/index&#x27;), (&lt;lazyT &#x27;Errors&#x27;&gt;, False, &#x27;/admin/default/errors/Worksheet_App&#x27;), (&lt;lazyT &#x27;About&#x27;&gt;, False, &#x27;/admin/default/about/Worksheet_App&#x27;)]</div></td></tr></table></div></td></tr><tr><td><div><table><tr><td><div>web2py.com</div></td></tr><tr><td><div>False</div></td></tr><tr><td><div>http://www.web2py.com</div></td></tr><tr><td><div>[(&lt;lazyT &#x27;Download&#x27;&gt;, False, &#x27;http://www.web2py.com/examples/default/download&#x27;), (&lt;lazyT &#x27;Support&#x27;&gt;, False, &#x27;http://www.web2py.com/examples/default/support&#x27;), (&lt;lazyT &#x27;Demo&#x27;&gt;, False, &#x27;http://web2py.com/demo_admin&#x27;), (&lt;lazyT &#x27;Quick Examples&#x27;&gt;, False, &#x27;http://web2py.com/examples/default/examples&#x27;), (&lt;lazyT &#x27;FAQ&#x27;&gt;, False, &#x27;http://web2py.com/AlterEgo&#x27;), (&lt;lazyT &#x27;Videos&#x27;&gt;, False, &#x27;http://www.web2py.com/examples/default/videos/&#x27;), (&lt;lazyT &#x27;Free Applications&#x27;&gt;, False, &#x27;http://web2py.com/appliances&#x27;), (&lt;lazyT &#x27;Plugins&#x27;&gt;, False, &#x27;http://web2py.com/plugins&#x27;), (&lt;lazyT &#x27;Layouts&#x27;&gt;, False, &#x27;http://web2py.com/layouts&#x27;), (&lt;lazyT &#x27;Recipes&#x27;&gt;, False, &#x27;http://web2pyslices.com/&#x27;), (&lt;lazyT &#x27;Semantic&#x27;&gt;, False, &#x27;http://web2py.com/semantic&#x27;)]</div></td></tr></table></div></td></tr><tr><td><div><table><tr><td><div>Documentation</div></td></tr><tr><td><div>False</div></td></tr><tr><td><div>http://www.web2py.com/book</div></td></tr><tr><td><div>[(&lt;lazyT &#x27;Preface&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/00&#x27;), (&lt;lazyT &#x27;Introduction&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/01&#x27;), (&lt;lazyT &#x27;Python&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/02&#x27;), (&lt;lazyT &#x27;Overview&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/03&#x27;), (&lt;lazyT &#x27;The Core&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/04&#x27;), (&lt;lazyT &#x27;The Views&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/05&#x27;), (&lt;lazyT &#x27;Database&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/06&#x27;), (&lt;lazyT &#x27;Forms and Validators&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/07&#x27;), (&lt;lazyT &#x27;Email and SMS&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/08&#x27;), (&lt;lazyT &#x27;Access Control&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/09&#x27;), (&lt;lazyT &#x27;Services&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/10&#x27;), (&lt;lazyT &#x27;Ajax Recipes&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/11&#x27;), (&lt;lazyT &#x27;Components and Plugins&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/12&#x27;), (&lt;lazyT &#x27;Deployment Recipes&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/13&#x27;), (&lt;lazyT &#x27;Other Recipes&#x27;&gt;, False, &#x27;http://www.web2py.com/book/default/chapter/14&#x27;), (&lt;lazyT &#x27;Buy this book&#x27;&gt;, False, &#x27;http://stores.lulu.com/web2py&#x27;)]</div></td></tr></table></div></td></tr><tr><td><div><table><tr><td><div>Community</div></td></tr><tr><td><div>False</div></td></tr><tr><td><div>None</div></td></tr><tr><td><div>[(&lt;lazyT &#x27;Groups&#x27;&gt;, False, &#x27;http://www.web2py.com/examples/default/usergroups&#x27;), (&lt;lazyT &#x27;Twitter&#x27;&gt;, False, &#x27;http://twitter.com/web2py&#x27;), (&lt;lazyT &#x27;Live Chat&#x27;&gt;, False, &#x27;http://webchat.freenode.net/?channels=web2py&#x27;)]</div></td></tr></table></div></td></tr><tr><td><div><table><tr><td><div>Plugins</div></td></tr><tr><td><div>False</div></td></tr><tr><td><div>None</div></td></tr><tr><td><div>[(&#x27;plugin_wiki&#x27;, False, &#x27;http://web2py.com/examples/default/download&#x27;), (&lt;lazyT &#x27;Other Plugins&#x27;&gt;, False, &#x27;http://web2py.com/plugins&#x27;), (&lt;lazyT &#x27;Layout Plugins&#x27;&gt;, False, &#x27;http://web2py.com/layouts&#x27;)]</div></td></tr></table></div></td></tr></table></div></td></tr></table></div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">meta</td><td style="vertical-align:top;">:</td><td><div><table><tr><td style="font-weight:bold;vertical-align:top;">author</td><td style="vertical-align:top;">:</td><td><div>Your Name &lt;you@example.com&gt;</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">generator</td><td style="vertical-align:top;">:</td><td><div>Web2py Web Framework</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">keywords</td><td style="vertical-align:top;">:</td><td><div>web2py, python, framework</div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">models_to_run</td><td style="vertical-align:top;">:</td><td><div><table><tr><td><div>^\\w+\\.py$</div></td></tr><tr><td><div>^default/\\w+\\.py$</div></td></tr><tr><td><div>^default/remove_class_problem_type/\\w+\\.py$</div></td></tr></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">postprocessing</td><td style="vertical-align:top;">:</td><td><div><table></table></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_client</td><td style="vertical-align:top;">:</td><td><div>127.0.0.1</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_cookie_compression_level</td><td style="vertical-align:top;">:</td><td><div>None</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_cookie_expires</td><td style="vertical-align:top;">:</td><td><div>None</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_cookie_key</td><td style="vertical-align:top;">:</td><td><div>None</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_data_name</td><td style="vertical-align:top;">:</td><td><div>session_data_worksheet_app</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_file</td><td style="vertical-align:top;">:</td><td><div>&lt;open file &#x27;/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/sessions/127.0.0.1-5f4d1b9b-a116-4622-99d5-966cf1dd835d&#x27;, mode &#x27;rb+&#x27; at 0x109e849c0&gt;</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_filename</td><td style="vertical-align:top;">:</td><td><div>/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/sessions/127.0.0.1-5f4d1b9b-a116-4622-99d5-966cf1dd835d</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_hash</td><td style="vertical-align:top;">:</td><td><div>1599778b978dc18b8c5b9a0fd1ba4ce5</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_id</td><td style="vertical-align:top;">:</td><td><div>127.0.0.1-5f4d1b9b-a116-4622-99d5-966cf1dd835d</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_id_name</td><td style="vertical-align:top;">:</td><td><div>session_id_worksheet_app</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_locked</td><td style="vertical-align:top;">:</td><td><div>True</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_masterapp</td><td style="vertical-align:top;">:</td><td><div>Worksheet_App</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_new</td><td style="vertical-align:top;">:</td><td><div>False</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">session_storage_type</td><td style="vertical-align:top;">:</td><td><div>file</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">status</td><td style="vertical-align:top;">:</td><td><div>200</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">subtitle</td><td style="vertical-align:top;">:</td><td><div></div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">title</td><td style="vertical-align:top;">:</td><td><div>Worksheet App</div></td></tr><tr><td style="font-weight:bold;vertical-align:top;">view</td><td style="vertical-align:top;">:</td><td><div>default/remove_class_problem_type.html</div></td></tr></table></div>'
+tRp204
+sS'locals'
+p205
+(dp206
+S'tables'
+p207
+S'<bound method SQLiteAdapter.tables of <gluon.dal.SQLiteAdapter object>>'
+p208
+sS'fields'
+p209
+S'[]'
+p210
+sS'self'
+p211
+S'<gluon.dal.SQLiteAdapter object>'
+p212
+sS'tablenames'
+p213
+S'[]'
+p214
+sS'tablenames_for_common_filters'
+p215
+S'[]'
+p216
+sS'query'
+p217
+S'False'
+p218
+sS'attributes'
+p219
+g21
+sS'args_get'
+p220
+S'<built-in method get of dict object>'
+p221
+sssS'traceback'
+p222
+S'Traceback (most recent call last):\n  File "/Applications/web2py.app/Contents/Resources/gluon/restricted.py", line 221, in restricted\n  File "/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/controllers/default.py", line 211, in <module>\n  File "/Applications/web2py.app/Contents/Resources/gluon/globals.py", line 388, in <lambda>\n  File "/Applications/web2py.app/Contents/Resources/applications/Worksheet_App/controllers/default.py", line 174, in remove_class_problem_type\n  File "/Applications/web2py.app/Contents/Resources/gluon/dal.py", line 10718, in select\n  File "/Applications/web2py.app/Contents/Resources/gluon/dal.py", line 2465, in select\n  File "/Applications/web2py.app/Contents/Resources/gluon/dal.py", line 1862, in select\n  File "/Applications/web2py.app/Contents/Resources/gluon/dal.py", line 1698, in _select\nSyntaxError: Set: no tables selected\n'
+p223
+s.

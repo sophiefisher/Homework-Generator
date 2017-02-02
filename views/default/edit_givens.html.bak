@@ -1,0 +1,32 @@
+{{extend 'layout.html'}}
+    <style>
+        .title {
+            float:left; 
+            padding-left: 16px;
+        }
+        .button {
+            float:left; 
+        }
+        .ui-helper-center {
+            text-align: center;
+            vertical-align:middle
+        }
+        .delete {
+            font-size: 40px;
+        }
+
+        .name {
+            font-size: 35px;
+        }
+        .var {
+            color: #0099FF;
+            font-size: 30px;
+        }
+
+    </style>
+<h4 class = "button">{{=A('Back',_href=URL('default','teacher_interface'),_class='btn')}}</h4>
+<h3 class = "title">Edit Variable: <span class = "var">{{=given_type.name}}</span>, {{=problem_type.name}}</h3>
+<br>
+<br>
+<br>
+{{=form}}

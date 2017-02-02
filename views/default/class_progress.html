@@ -1,0 +1,76 @@
+{{extend 'layout.html'}}
+    <style>
+         .title {
+            float:left; 
+            padding-left: 16px;
+        }
+        .ui-helper-center {
+            text-align: center;
+            vertical-align:middle
+        }
+        .button {
+            float:left; 
+        }
+        #coursename {
+            font-size: 30px;
+        }
+        #problem_type {
+            font-size: 20px;
+            padding: 15px;
+        }
+        #none{
+            font-size: 20px;
+            padding-top: 7px;
+        }
+    </style>
+
+
+<h4 class="button">{{=A('Back',_href=session.jump_back,_class='btn')}}</h4>
+{{if teacher_courses:}}
+<h2 class = "title">Click on a problem to view its class statistics:</h2>
+<br>
+<br>
+<br>
+
+<table border = 1>
+    <tr>
+        {{for course in teacher_courses:}}
+            <td style = "padding: 20px; padding-left: 28px; padding-right: 28px;">
+                <span id = "coursename">
+                    <b>{{=course.course_id.name}}</b>
+                </span>
+        {{pass}}
+            </td>
+    </tr>
+    <tr>
+        {{for course in teacher_courses:}}
+            <td>
+                {{if course_problem_types[course.course_id]:}}
+                    <ul style ="list-style-type: none;" >
+                    {{for rec in course_problem_types[course.course_id]:}}
+                        <li id = "problem_type">
+                            {{=A(rec.problem_type_id.name,_href=URL('default','problem_statistics',args=(course.course_id,rec.problem_type_id)))}}
+                        </li>
+                     {{pass}}
+                    </ul>
+                    
+                {{else:}}
+                    <span id="none">
+                        No problems assigned to this course yet!<br>
+                    </span>
+                        <div style = "font-size: 20px; line-height: 26px; padding-left: 20px; padding-top: 6px;">
+                            {{=A('Assign problems to this course',_href=URL('default','teacher_interface',))}}
+                            <br>
+                            {{=A('Create more problems',_href=URL('default','create_problem'))}}
+                        </div>
+                {{pass}}
+        {{pass}}
+            </td>
+    </tr>
+</table>
+{{else:}}
+<h1 class = "title">No Classes to Display!</h1>
+<br>
+<br>
+<br>
+{{pass}}

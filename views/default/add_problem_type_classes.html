@@ -1,0 +1,19 @@
+{{extend 'layout.html'}}
+    <style>
+        .title {
+            float:left; 
+            padding-left: 16px;
+            max-width: 950px;
+        }
+        .button {
+            float:left; 
+        }
+    </style>
+<h4 class = "button">{{=A('Back',_href=URL('default','teacher_interface'),_class='btn')}}</h4>
+<h2 class = "title">
+    Add Classes to {{=problem_type.name.capitalize()}} Problem
+</h2>
+<br>
+<br>
+<br>
+{{=form}}

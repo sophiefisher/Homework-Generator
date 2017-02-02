@@ -1,0 +1,8 @@
+{{extend 'layout.html'}}
+
+{{if auth.has_membership('teacher'):}}
+<h2>{{=A('Teacher Interface',_href=URL('default','teacher_interface'))}}</h2>
+{{pass}}
+{{if auth.has_membership('student'):}}
+<h2>{{=A('Student Interface',_href=URL('default','student_interface'))}}</h2>
+{{pass}}
